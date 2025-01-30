@@ -1,16 +1,12 @@
-node_modules
-temp
-build
-dist
-.DS_Store
+# Ignore everything
+*
 
-# VS Code
-.vscode/*
-.history/
-*.vsix
+# Do not ignore .gitignore itself
+!.gitignore
 
-# IDEA files
-.idea
+# Allow contracts folder and its contents
+!contracts/
+!contracts/**
 
-# VIM
-Session.vim
+# Allow README.md
+!README.md
