@@ -1,5 +1,18 @@
 #include "imports/stdlib.fc";
 
-() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+global int counter;
 
+() recv_external(slice msg_body) impure {
+    int increment = msg_body~load_uint(32);
+
+    ;; Unsafe: Sends a message before updating the counter
+    send_raw_message(begin_cell().store_uint(increment, 32).end_cell(), 0);
+
+    ;; Another transaction could modify `counter` before this update
+    counter += increment;
+}
+
+() recv_internal(slice in_msg) impure {
+    int increment = in_msg~load_uint(32);
+    counter += increment;
 }
