@@ -1,15 +1,15 @@
 #include "imports/stdlib.fc";
 
-global cell order_book;
+global cell order_book;  ;; Global storage for the order book
 
 () recv_external(slice msg_body) impure {
     int amount = msg_body~load_uint(32);
     int price = msg_body~load_uint(32);
 
-    ;; Step 1: Store order
+    ;; Step 1: Store the order (amount and price) in the order book
     order_book = begin_cell().store_uint(amount, 32).store_uint(price, 32).end_cell();
 
-    ;; Step 2: Wait for another transaction to match orders
+    ;; Step 2: Send the order for matching
     send_raw_message(order_book, 0);
 }
 
@@ -17,9 +17,13 @@ global cell order_book;
     int matched_amount = in_msg~load_uint(32);
     int matched_price = in_msg~load_uint(32);
 
-    ;; Problem: The order book might have changed
-    if (matched_price != price) {
+    ;; Retrieve the original price from the order_book
+    slice order_slice = order_book.begin_parse();  ;;  Parse the stored order
+    int stored_amount = order_slice~load_uint(32); ;;Load the stored amount
+    int stored_price = order_slice~load_uint(32);  ;;  Load the stored price
+
+    ;; Check if the matched price is different from the stored price
+    if (matched_price != stored_price) {           ;; Fixed condition
         send_raw_message(begin_cell().store_uint(0, 32).end_cell(), 0);
     }
 }
-
