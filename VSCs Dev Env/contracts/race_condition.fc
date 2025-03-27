@@ -1,0 +1,113 @@
+#include "imports/stdlib.fc";
+
+global int total_balance;
+global cell accounts;
+
+() load_data() impure {
+    slice ds = get_data().begin_parse();
+    total_balance = ds~load_coins();
+    accounts = ds~load_dict();
+}
+
+() save_data () impure {
+    set_data(begin_cell()
+            .store_coins(total_balance)
+            .store_dict(accounts)
+        .end_cell());
+}
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) {
+        return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+
+    int flags = cs~load_uint(4);
+    ;; Check for bounced message
+    if (flags & 1) {
+        return ();
+    }
+
+    slice sender_address = cs~load_msg_addr();
+    ;; Reserve money
+    if (equal_slices_bits(sender_address, my_address())) {
+        return ();
+    }
+    
+    (_, int sender) = parse_std_addr(sender_address);
+    
+    int op = in_msg_body~load_uint(32);
+    
+    load_data();
+    cell accounts' = accounts;
+
+    ;; Deposit
+    if( op == 0 ) {
+        int balance = msg_value;
+        total_balance = total_balance + balance;
+        (_, slice old_balance_slice, int found?) = accounts'.udict_delete_get?(256, sender);
+        if(found?) {
+            balance += old_balance_slice~load_coins();
+        }
+        accounts'~udict_set_builder(256, sender, begin_cell().store_coins(balance));
+    }
+    
+    ;; Withdraw
+    if (op == 1) {
+        (accounts', slice old_balance_slice, int found?) = accounts'.udict_delete_get?(256, sender);
+        throw_unless(98, found?);
+        int balance = old_balance_slice~load_coins();
+        int withdraw_amount = in_msg_body~load_coins();
+        throw_unless(100, balance >= withdraw_amount);
+        balance -= withdraw_amount;
+        total_balance = total_balance - withdraw_amount;
+        if(balance > 0 ) {
+            accounts'~udict_set_builder(256, sender, begin_cell().store_coins(balance));
+        }
+      
+        ;; To be sure nobody steal funds - first send it to ourselves
+        var msg = begin_cell()
+                    .store_uint(0x18, 6)
+                    .store_slice(my_address())
+                    .store_coins(total_balance)
+                    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                .end_cell();
+        send_raw_message(msg, 2);      
+      
+        int mode = 2 | 128;
+        ;; All money withdrawn, shutdown bank
+        if(get_balance().pair_first() < withdraw_amount) {
+            mode |= 32;
+        }
+        
+        ;; Everything else can be sent to user
+        var msg = begin_cell()
+                    .store_uint(0x18, 6)
+                    .store_slice(sender_address)
+                    .store_coins(0)
+                    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                .end_cell();
+        send_raw_message(msg, mode);
+    }
+
+    accounts = accounts';
+    save_data();
+}
+
+int get_user_balance(int address) method_id {
+    load_data();
+    (_, slice balance_slice, int found?) = accounts.udict_delete_get?(256, address);
+
+    if ~ found? {
+        return 0;
+    }
+    return balance_slice~load_coins();
+}
+
+int get_total_balance() method_id {
+    slice ds = get_data().begin_parse();
+    total_balance = ds~load_coins();
+
+    return total_balance;
+}
