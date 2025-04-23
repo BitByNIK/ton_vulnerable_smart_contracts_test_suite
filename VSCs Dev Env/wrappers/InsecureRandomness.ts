@@ -7,7 +7,10 @@ export function insecureRandomnessConfigToCell(config: InsecureRandomnessConfig)
 }
 
 export class InsecureRandomness implements Contract {
-    constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell }) {}
+    constructor(
+        readonly address: Address,
+        readonly init?: { code: Cell; data: Cell },
+    ) {}
 
     static createFromAddress(address: Address) {
         return new InsecureRandomness(address);
@@ -23,7 +26,12 @@ export class InsecureRandomness implements Contract {
         await provider.internal(via, {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: beginCell().endCell(),
+            body: Cell.EMPTY,
         });
+    }
+
+    async getBalance(provider: ContractProvider) {
+        const result = await provider.get('balance', []);
+        return result.stack.readBigNumber();
     }
 }
