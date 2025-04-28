@@ -37,7 +37,6 @@ global slice data::owner2;
 slice owner1() method_id {
     var cs = get_data().begin_parse();
     return cs~load_msg_addr();
-  
 }
 
 slice owner2() method_id {
